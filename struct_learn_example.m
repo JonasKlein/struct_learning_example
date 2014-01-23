@@ -9,49 +9,114 @@
 % Define parameters
 
 NUMBER_OF_FEATURES = 2;
-LENGTH_OF_Y = 3;
+LENGTH_OF_Y = 8;
 LAMBDA = 25;
 
-% Generate ys, pick gold standard y
-
+% Generate ys
 ys = de2bi(0:2^LENGTH_OF_Y-1);
-gold_standard_y_num = ceil(size(ys,1)*rand(1));
-gold_standard_y = ys(gold_standard_y_num,:);
 
-% 'Calculate' features (i.e. make them up for the purpose of the example)
 
-features = rand(size(ys,1),NUMBER_OF_FEATURES);
-gold_standard_feature = features(gold_standard_y_num,:);
+% Randomly pick good and bad edges
+good_edges = rand(1,LENGTH_OF_Y) < .5;
 
-%% Training
 
-min_search_function_w_handle = @(w)min_search_function(LAMBDA, gold_standard_y, ys, gold_standard_feature, features, w);
+% Gold standard is the one with only good edges
+gold_standard_y = double(good_edges);
+
+
+% Randomly pick means for each feature: one for good edges, one for bad
+% ones.
+% Convention: good: first column, bad: second column
+feature_means = myUtilities.scale(rand(NUMBER_OF_FEATURES,2),1,15);
+
+
+% For each edge generate a number that represents the value of a particular
+% feature (alpha numbers in paper)
+% Convention: dimension 1: edge, dimension 2: feature
+alphas = randn(LENGTH_OF_Y,NUMBER_OF_FEATURES); % zeros(LENGTH_OF_Y,NUMBER_OF_FEATURES);
+feature_means_extended = cat(3,...
+                        repmat(feature_means(:,1)',LENGTH_OF_Y,1),...
+                        repmat(feature_means(:,2)',LENGTH_OF_Y,1));
+good_edges_extended = repmat(good_edges',1,NUMBER_OF_FEATURES);
+alphas_mean_adjusted = alphas + ...
+    good_edges_extended .* feature_means_extended(:,:,1) - ...
+    (good_edges_extended - 1) .* feature_means_extended(:,:,2);
+
+
+% Plot alphas
+alpha_handle = figure();
+hold on
+if size(alphas,2) == 1
+    scatter(alphas_mean_adjusted(good_edges,1),ones(size(alphas)),'g');
+    scatter(alphas_mean_adjusted(~good_edges,1),ones(size(alphas)),'r');
+elseif size(alphas,2) == 2
+    scatter(alphas_mean_adjusted(good_edges,1),alphas_mean_adjusted(good_edges,2),'g');
+    scatter(alphas_mean_adjusted(~good_edges,1),alphas_mean_adjusted(~good_edges,2),'r');
+    title('Feature space (edges)');
+    xlabel('Feature 1');
+    ylabel('Feature 2');
+elseif size(alphas,2) == 3
+    scatter3(alphas_mean_adjusted(good_edges,1),alphas_mean_adjusted(good_edges,2),alphas_mean_adjusted(good_edges,3),'g');
+    scatter3(alphas_mean_adjusted(~good_edges,1),alphas_mean_adjusted(~good_edges,2),alphas_mean_adjusted(~good_edges,3),'r');
+    title('Feature space (edges)');
+    xlabel('Feature 1');
+    ylabel('Feature 2');
+    zlabel('Feature 3');
+end
+
+
+% Calculate feature vectors for all ys from alphas
+features = ys * alphas;
+
+gold_standard_features = gold_standard_y * alphas;
+
+% Training
+
+min_search_function_w_handle = @(w)min_search_function(LAMBDA, gold_standard_y, ys, gold_standard_features, features, w);
 
 w_star = fminsearch(min_search_function_w_handle,zeros(1,NUMBER_OF_FEATURES));
 %w_star = [-1,-1];
 
-% Get an idea of what the l function looks like:
-
-l_w_handle = @(w)l(gold_standard_y, ys, gold_standard_feature, features, w);
-[w_probes_1,w_probes_2] = meshgrid(-1.5:0.1:1.5);
-l_res = zeros(size(w_probes_1));
-for i = 1 : size(w_probes_1,1)
-    for j = 1 : size(w_probes_1,2)
-        l_res(i,j) = l_w_handle([w_probes_1(i,j),w_probes_2(i,j)]);
-    end
+% Add w_star to alpha plot
+figure(alpha_handle)
+if size(alphas,2) == 2
+    plot([0;w_star(1)],[0,w_star(2)]);
+    plot(0,0,'b*');
+elseif size(alphas,2) == 3
+    plot3([0;w_star(1)],[0,w_star(2)],[0;w_star(3)]);
+    plot3(0,0,0,'b*');
 end
-figure(1);
-mesh(l_res);
+
+
+% Get an idea of what the l function looks like:
+if NUMBER_OF_FEATURES == 2
+    l_w_handle = @(w)l(gold_standard_y, ys, gold_standard_features, features, w);
+    [w_probes_1,w_probes_2] = meshgrid(-1.5:0.1:1.5);
+    l_res = zeros(size(w_probes_1));
+    for i = 1 : size(w_probes_1,1)
+        for j = 1 : size(w_probes_1,2)
+            l_res(i,j) = l_w_handle([w_probes_1(i,j),w_probes_2(i,j)]);
+        end
+    end
+    figure();
+    mesh(l_res);
+else
+    disp('Can only plot the l function if the number of features is two (or less)');
+end
 
 % Get an idea of what the loss function looks like:
-min_search_function_res = zeros(size(w_probes_1));
-for i = 1 : size(w_probes_1,1)
-    for j = 1 : size(w_probes_1,2)
-        min_search_function_res(i,j) = min_search_function_w_handle([w_probes_1(i,j),w_probes_2(i,j)]);
+if NUMBER_OF_FEATURES == 2
+    min_search_function_res = zeros(size(w_probes_1));
+    for i = 1 : size(w_probes_1,1)
+        for j = 1 : size(w_probes_1,2)
+            min_search_function_res(i,j) = min_search_function_w_handle([w_probes_1(i,j),w_probes_2(i,j)]);
+        end
     end
+    figure();
+    mesh(min_search_function_res);
+else
+    disp('Can only plot the loss function if the number of features is two (or less)');
 end
-figure(2);
-mesh(min_search_function_res);
 
 
 % Do we allways get the same w_star? --> yes, more or less.
@@ -67,29 +132,60 @@ y_stars = find(features*w_star' == min(features*w_star'));
 % Visualization
 
 if NUMBER_OF_FEATURES == 2
-    figure(3)
+    figure()
     % Plot features with losses encoded in size
     losses = bsxfun(@loss_function,repmat(gold_standard_y,size(ys,1),1)',ys')';
     energies = features * w_star';
-    scatter(features(:,1),features(:,2),myUtilities.scale(losses,20,300),repmat(myUtilities.scale(energies,0,1),1,3).*ones(size(ys,1),3));
+    scatter(features(:,1),features(:,2),myUtilities.scale(losses,20,300),...
+        repmat(myUtilities.scale(energies,0,1),1,3).*ones(size(ys,1),3));
     % Plot y_stars in green
     hold on
     for y_star_num = 1 : length(y_stars)
-        plot(features(y_stars(y_star_num),1),features(y_stars(y_star_num),2),'g*');
+        plot(features(y_stars(y_star_num),1),features(y_stars(y_star_num),2),'r*');
     end
     % Plot features of gold standard in red
-    plot(features(gold_standard_y_num,1),features(gold_standard_y_num,2),'r*');
+    plot(gold_standard_features(1),gold_standard_features(2),'g*');
     
     % Plot direction of w_star
     plot([0;w_star(1)],[0,w_star(2)]);
     plot(0,0,'b*');
     
-    title('loss size coded, energy color coded; red: gold st., green: picked');
+    title('loss size coded, energy color coded; green: gold st., red: picked');
+    xlabel('Feature 1');
+    ylabel('Feature 2');
     
-    % Energy vs. loss function
-    figure(4);
+elseif NUMBER_OF_FEATURES == 3
+    figure()
+    % Plot features with losses encoded in size
+    losses = bsxfun(@loss_function,repmat(gold_standard_y,size(ys,1),1)',ys')';
+    energies = features * w_star';
+    scatter3(features(:,1),features(:,2),features(:,3),myUtilities.scale(losses,20,300),...
+        repmat(myUtilities.scale(energies,0,1),1,3).*ones(size(ys,1),3));
+    % Plot y_stars in green
+    hold on
+    for y_star_num = 1 : length(y_stars)
+        plot3(features(y_stars(y_star_num),1),features(y_stars(y_star_num),2),features(y_stars(y_star_num),3),'r*');
+    end
+    % Plot features of gold standard in red
+    plot3(gold_standard_features(1),gold_standard_features(2),gold_standard_features(3),'g*');
+    
+    % Plot direction of w_star
+    plot3([0;w_star(1)],[0,w_star(2)],[0;w_star(3)]);
+    plot3(0,0,0,'b*');
+    
+    title('loss size coded, energy color coded; green: gold st., red: picked');
+    xlabel('Feature 1');
+    ylabel('Feature 2');
+    zlabel('Feature 3');
+end
+
+% Energy vs. loss function --> doesn't depend on dimensionality: can be
+% plottet either way.
+    figure();
     scatter(losses,energies);
     xlabel('Losses');
     ylabel('Energies');
     set(gca,'XDir','reverse');
-end
+
+%% Close all
+close all

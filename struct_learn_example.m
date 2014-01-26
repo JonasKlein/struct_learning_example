@@ -6,9 +6,16 @@
 % Try larger LAMBDAs to see what happens when the data term is favoured
 % more.
 
+% Clear
+clear all
+
+% 'Script behaviour'
+PLOT_L_FUNCTION = false;
+PLOT_LOSS_FUNCTION = false;
+
 % Define parameters
 
-NUMBER_OF_FEATURES = 2;
+NUMBER_OF_FEATURES = 1;
 LENGTH_OF_Y = 8;
 LAMBDA = 25;
 
@@ -27,7 +34,7 @@ gold_standard_y = double(good_edges);
 % Randomly pick means for each feature: one for good edges, one for bad
 % ones.
 % Convention: good: first column, bad: second column
-feature_means = myUtilities.scale(rand(NUMBER_OF_FEATURES,2),1,15);
+feature_means = myUtilities.scale(rand(NUMBER_OF_FEATURES,2),5,15);
 
 
 % For each edge generate a number that represents the value of a particular
@@ -47,8 +54,11 @@ alphas_mean_adjusted = alphas + ...
 alpha_handle = figure();
 hold on
 if size(alphas,2) == 1
-    scatter(alphas_mean_adjusted(good_edges,1),ones(size(alphas)),'g');
-    scatter(alphas_mean_adjusted(~good_edges,1),ones(size(alphas)),'r');
+    scatter(alphas_mean_adjusted(good_edges,1),ones(size(alphas(good_edges,:))),'g');
+    scatter(alphas_mean_adjusted(~good_edges,1),ones(size(alphas(~good_edges,:))),'r');
+    title('Feature space (edges)');
+    xlabel('Feature 1');
+    ylabel('Constant');
 elseif size(alphas,2) == 2
     scatter(alphas_mean_adjusted(good_edges,1),alphas_mean_adjusted(good_edges,2),'g');
     scatter(alphas_mean_adjusted(~good_edges,1),alphas_mean_adjusted(~good_edges,2),'r');
@@ -66,9 +76,9 @@ end
 
 
 % Calculate feature vectors for all ys from alphas
-features = ys * alphas;
+features = ys * alphas_mean_adjusted;
 
-gold_standard_features = gold_standard_y * alphas;
+gold_standard_features = gold_standard_y * alphas_mean_adjusted;
 
 % Training
 
@@ -89,33 +99,38 @@ end
 
 
 % Get an idea of what the l function looks like:
-if NUMBER_OF_FEATURES == 2
-    l_w_handle = @(w)l(gold_standard_y, ys, gold_standard_features, features, w);
-    [w_probes_1,w_probes_2] = meshgrid(-1.5:0.1:1.5);
-    l_res = zeros(size(w_probes_1));
-    for i = 1 : size(w_probes_1,1)
-        for j = 1 : size(w_probes_1,2)
-            l_res(i,j) = l_w_handle([w_probes_1(i,j),w_probes_2(i,j)]);
+if PLOT_L_FUNCTION
+    if NUMBER_OF_FEATURES == 2
+        l_w_handle = @(w)l(gold_standard_y, ys, gold_standard_features, features, w);
+        [w_probes_1,w_probes_2] = meshgrid(-1.5:0.1:1.5);
+        l_res = zeros(size(w_probes_1));
+        for i = 1 : size(w_probes_1,1)
+            for j = 1 : size(w_probes_1,2)
+                l_res(i,j) = l_w_handle([w_probes_1(i,j),w_probes_2(i,j)]);
+            end
         end
+        figure();
+        mesh(l_res);
+    else
+        disp('Can only plot the l function if the number of features is two (or less)');
     end
-    figure();
-    mesh(l_res);
-else
-    disp('Can only plot the l function if the number of features is two (or less)');
 end
 
+
 % Get an idea of what the loss function looks like:
-if NUMBER_OF_FEATURES == 2
-    min_search_function_res = zeros(size(w_probes_1));
-    for i = 1 : size(w_probes_1,1)
-        for j = 1 : size(w_probes_1,2)
-            min_search_function_res(i,j) = min_search_function_w_handle([w_probes_1(i,j),w_probes_2(i,j)]);
+if PLOT_LOSS_FUNCTION
+    if NUMBER_OF_FEATURES == 2
+        min_search_function_res = zeros(size(w_probes_1));
+        for i = 1 : size(w_probes_1,1)
+            for j = 1 : size(w_probes_1,2)
+                min_search_function_res(i,j) = min_search_function_w_handle([w_probes_1(i,j),w_probes_2(i,j)]);
+            end
         end
+        figure();
+        mesh(min_search_function_res);
+    else
+        disp('Can only plot the loss function if the number of features is two (or less)');
     end
-    figure();
-    mesh(min_search_function_res);
-else
-    disp('Can only plot the loss function if the number of features is two (or less)');
 end
 
 
@@ -130,8 +145,30 @@ end
 y_stars = find(features*w_star' == min(features*w_star'));
 
 % Visualization
-
-if NUMBER_OF_FEATURES == 2
+if NUMBER_OF_FEATURES == 1
+    figure()
+    % Plot features with losses encoded in size
+    losses = bsxfun(@loss_function,repmat(gold_standard_y,size(ys,1),1)',ys')';
+    energies = features * w_star';
+    scatter(features,zeros(size(features)),myUtilities.scale(losses,20,300),...
+        repmat(myUtilities.scale(energies,0,1),1,3).*ones(size(ys,1),3));
+    % Plot y_stars in green
+    hold on
+    for y_star_num = 1 : length(y_stars)
+        plot(features(y_stars(y_star_num),1),0,'r*');
+    end
+    % Plot features of gold standard in red
+    plot(gold_standard_features,0,'g*');
+    
+    % Plot direction of w_star
+    plot([0;w_star(1)],[0,0]);
+    plot(0,0,'b*');
+    
+    title('loss size coded, energy color coded; green: gold st., red: picked');
+    xlabel('Feature 1');
+    ylabel('Constant');
+    
+elseif NUMBER_OF_FEATURES == 2
     figure()
     % Plot features with losses encoded in size
     losses = bsxfun(@loss_function,repmat(gold_standard_y,size(ys,1),1)',ys')';

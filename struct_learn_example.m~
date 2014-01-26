@@ -9,15 +9,19 @@
 % Clear
 clear all
 
+% ======= SETTINGS ========================================================
+
 % 'Script behaviour'
-PLOT_L_FUNCTION = false;
-PLOT_LOSS_FUNCTION = false;
+PLOT_L_FUNCTION = true;
+PLOT_LOSS_FUNCTION = true;
 
 % Define parameters
 
-NUMBER_OF_FEATURES = 1;
+NUMBER_OF_FEATURES = 2;
 LENGTH_OF_Y = 8;
-LAMBDA = 25;
+LAMBDA = 20;
+
+% =========================================================================
 
 % Generate ys
 ys = de2bi(0:2^LENGTH_OF_Y-1);
@@ -34,38 +38,39 @@ gold_standard_y = double(good_edges);
 % Randomly pick means for each feature: one for good edges, one for bad
 % ones.
 % Convention: good: first column, bad: second column
-feature_means = myUtilities.scale(rand(NUMBER_OF_FEATURES,2),5,15);
+feature_means = myUtilities.scale(rand(NUMBER_OF_FEATURES-1,2),5,15);
 
 
 % For each edge generate a number that represents the value of a particular
 % feature (alpha numbers in paper)
+% Feature one should be constant
 % Convention: dimension 1: edge, dimension 2: feature
-alphas = randn(LENGTH_OF_Y,NUMBER_OF_FEATURES); % zeros(LENGTH_OF_Y,NUMBER_OF_FEATURES);
+alphas = randn(LENGTH_OF_Y,NUMBER_OF_FEATURES-1); % zeros(LENGTH_OF_Y,NUMBER_OF_FEATURES);
 feature_means_extended = cat(3,...
                         repmat(feature_means(:,1)',LENGTH_OF_Y,1),...
                         repmat(feature_means(:,2)',LENGTH_OF_Y,1));
-good_edges_extended = repmat(good_edges',1,NUMBER_OF_FEATURES);
+good_edges_extended = repmat(good_edges',1,NUMBER_OF_FEATURES-1);
 alphas_mean_adjusted = alphas + ...
     good_edges_extended .* feature_means_extended(:,:,1) - ...
     (good_edges_extended - 1) .* feature_means_extended(:,:,2);
-
+alphas_mean_adjusted = cat(2,ones(LENGTH_OF_Y,1),alphas_mean_adjusted);
 
 % Plot alphas
 alpha_handle = figure();
 hold on
-if size(alphas,2) == 1
-    scatter(alphas_mean_adjusted(good_edges,1),ones(size(alphas(good_edges,:))),'g');
-    scatter(alphas_mean_adjusted(~good_edges,1),ones(size(alphas(~good_edges,:))),'r');
+if size(alphas_mean_adjusted,2) == 1
+    scatter(alphas_mean_adjusted(good_edges,1),ones(size(alphas_mean_adjusted(good_edges,:))),'g');
+    scatter(alphas_mean_adjusted(~good_edges,1),ones(size(alphas_mean_adjusted(~good_edges,:))),'r');
     title('Feature space (edges)');
     xlabel('Feature 1');
     ylabel('Constant');
-elseif size(alphas,2) == 2
+elseif size(alphas_mean_adjusted,2) == 2
     scatter(alphas_mean_adjusted(good_edges,1),alphas_mean_adjusted(good_edges,2),'g');
     scatter(alphas_mean_adjusted(~good_edges,1),alphas_mean_adjusted(~good_edges,2),'r');
     title('Feature space (edges)');
     xlabel('Feature 1');
     ylabel('Feature 2');
-elseif size(alphas,2) == 3
+elseif size(alphas_mean_adjusted,2) == 3
     scatter3(alphas_mean_adjusted(good_edges,1),alphas_mean_adjusted(good_edges,2),alphas_mean_adjusted(good_edges,3),'g');
     scatter3(alphas_mean_adjusted(~good_edges,1),alphas_mean_adjusted(~good_edges,2),alphas_mean_adjusted(~good_edges,3),'r');
     title('Feature space (edges)');
@@ -87,12 +92,16 @@ min_search_function_w_handle = @(w)min_search_function(LAMBDA, gold_standard_y, 
 w_star = fminsearch(min_search_function_w_handle,zeros(1,NUMBER_OF_FEATURES));
 %w_star = [-1,-1];
 
-% Add w_star to alpha plot
+% Add w_star to alpha plot; add 'descision boundary'
 figure(alpha_handle)
-if size(alphas,2) == 2
+if size(alphas_mean_adjusted,2) == 2
     plot([0;w_star(1)],[0,w_star(2)]);
     plot(0,0,'b*');
-elseif size(alphas,2) == 3
+    % descision boundary
+    boundary_vector = null(w_star);
+    [xlim_low,xlim_high] = xlim();
+    point_1 = 
+elseif size(alphas_mean_adjusted,2) == 3
     plot3([0;w_star(1)],[0,w_star(2)],[0;w_star(3)]);
     plot3(0,0,0,'b*');
 end
@@ -112,7 +121,7 @@ if PLOT_L_FUNCTION
         figure();
         mesh(l_res);
     else
-        disp('Can only plot the l function if the number of features is two (or less)');
+        disp('Can only plot the l function if the number of features is two (or less, but not implemented yet)');
     end
 end
 
@@ -129,7 +138,7 @@ if PLOT_LOSS_FUNCTION
         figure();
         mesh(min_search_function_res);
     else
-        disp('Can only plot the loss function if the number of features is two (or less)');
+        disp('Can only plot the loss function if the number of features is two (or less, but not implemented yet)');
     end
 end
 
@@ -218,11 +227,17 @@ end
 
 % Energy vs. loss function --> doesn't depend on dimensionality: can be
 % plottet either way.
-    figure();
-    scatter(losses,energies);
-    xlabel('Losses');
-    ylabel('Energies');
-    set(gca,'XDir','reverse');
+figure();
+scatter(losses,energies);
+xlabel('Losses');
+ylabel('Energies');
+set(gca,'XDir','reverse');
+
+% Align figures
+%figHandles = findobj('Type','figure'); % get all figure handles
+%for i = 2 : length(figHandles)
+%    iptwindowalign(figHandles(i-1),'right',figHandles(i),'left');
+%end
 
 %% Close all
 close all
